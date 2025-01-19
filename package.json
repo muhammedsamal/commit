@@ -1,0 +1,24 @@
+{
+  "name": "commit",
+  "module": "index.ts",
+  "type": "module",
+  "bin": {
+    "clip": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile clip"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.10.7",
+    "bun-types": "^1.1.45"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.33.1",
+    "commander": "^13.0.0"
+  }
+}
