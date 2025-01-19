@@ -1,10 +1,24 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { execSync } from "child_process";
+import {
+  spinner,
+  promptForCommitMessage,
+  confirmCommit,
+  formatSuccess,
+  formatError,
+  formatInfo,
+} from "./cli-utils";
 
 type CommitOptions = {
   staged: boolean;
   interactive: boolean;
+  add: boolean; // New option for auto-staging
 };
+
+interface GeneratedCommit {
+  message: string;
+  analysis: string;
+}
 
 export class CommitGenerator {
   private anthropic: Anthropic;
@@ -43,12 +57,26 @@ export class CommitGenerator {
     }
   }
 
+  private async stageAllChanges(): Promise<void> {
+    try {
+      execSync("git add -A", {
+        stdio: "inherit",
+        encoding: "utf-8",
+      });
+      console.log(formatSuccess("✓ All changes staged"));
+    } catch (error) {
+      throw new Error(
+        `Failed to stage changes: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+  }
+
   private buildPrompt(
     repoContext: string,
     recentCommits: string,
     diff: string,
   ): string {
-    return `You are an expert git commit message generator tasked with creating concise, single-line conventional commit messages. Your goal is to analyze the provided repository context and git diff to produce an accurate and informative commit message.
+    return `You are an expert git commit message generator tasked with creating concise, single-line conventional commit messages. Your goal is to analyze the provided repository context and git diff to produce accurate and informative commit messages.
 
 First, examine the following repository context and git diff:
 
@@ -62,17 +90,15 @@ ${recentCommits}
 ${diff}
 </git_diff>
 
-Now, follow these steps to generate the commit message:
+Now, follow these steps to generate commit messages:
 
 1. Wrap your analysis in <commit_analysis> tags. In your analysis:
    - List all modified files and summarize their changes
    - Categorize each change into potential commit types (feat, fix, refactor, style, docs, test, chore, or perf)
    - Identify the most specific scope based on the file paths and changes
    - Evaluate if there are any breaking changes or security implications
-   - Draft 3-5 potential subject lines that capture the essence of the change
-   - Choose the best subject line and justify your choice
 
-2. Based on your analysis, create a commit message that adheres to the following rules:
+2. Based on your analysis, create three different commit messages that adhere to the following rules:
    - Use this format exactly: <type>(<scope>): <subject>
    - The message MUST be a single line with no line breaks
    - Use imperative mood in the subject (e.g., "add" not "added")
@@ -81,14 +107,16 @@ Now, follow these steps to generate the commit message:
    - Be specific but concise (aim for 50 characters or less in the subject)
    - Ensure the message is readable and meaningful
 
-3. Present your final commit message wrapped in <commit_message> tags.`;
+3. Present your commit messages wrapped in <commit_message> tags, with one message per tag.`;
   }
 
-  private async generateMessage(diff: string): Promise<string> {
+  private async generateMessages(diff: string): Promise<GeneratedCommit[]> {
     try {
       const repoContext = await this.getRepoContext();
       const recentCommits = await this.getRecentCommits();
       const prompt = this.buildPrompt(repoContext, recentCommits, diff);
+
+      spinner.start("Generating commit messages...");
 
       const response = await this.anthropic.messages.create({
         model: "claude-3-sonnet-20240229",
@@ -101,47 +129,143 @@ Now, follow these steps to generate the commit message:
         ],
       });
 
-      // Extract the commit message from the response
+      spinner.succeed("Generated commit messages");
+
       const responseText = response.content.filter(
         (block) => block.type === "text",
       )[0]?.text;
+
       if (!responseText) {
         throw new Error("No response content found");
       }
 
-      const match = responseText.match(
-        /<commit_message>(.*?)<\/commit_message>/s,
+      // Extract analysis
+      const analysisMatch = responseText.match(
+        /<commit_analysis>(.*?)<\/commit_analysis>/s,
       );
-      if (!match) {
-        throw new Error("No commit message found in response");
+      const analysis = analysisMatch ? analysisMatch[1].trim() : "";
+
+      // Extract all commit messages
+      const messageMatches = responseText.matchAll(
+        /<commit_message>(.*?)<\/commit_message>/gs,
+      );
+
+      const messages = Array.from(messageMatches).map((match) => ({
+        message: match[1].trim(),
+        analysis: analysis,
+      }));
+
+      if (messages.length === 0) {
+        throw new Error("No commit messages found in response");
       }
 
-      return match[1].trim();
+      return messages;
     } catch (error) {
-      throw new Error(`Failed to generate commit message: ${error}`);
+      spinner.fail("Failed to generate commit messages");
+      throw error;
+    }
+  }
+
+  private async commitChanges(
+    message: string,
+    options: CommitOptions,
+  ): Promise<void> {
+    try {
+      // Auto-stage if requested
+      if (options.add) {
+        execSync("git add -A", {
+          stdio: ["inherit", "inherit", "inherit"],
+          encoding: "utf-8",
+        });
+        console.log(formatSuccess("✓ All changes staged"));
+      }
+
+      // Check for staged changes
+      const stagedChanges = execSync(
+        'git diff --staged --quiet || echo "has changes"',
+        {
+          encoding: "utf-8",
+        },
+      ).trim();
+
+      if (!stagedChanges) {
+        throw new Error(
+          "No changes staged for commit. Use -a flag to auto-stage changes or git add to stage manually.",
+        );
+      }
+
+      // Properly escape the commit message
+      const escapedMessage = message.replace(/"/g, '\\"');
+
+      execSync('git commit -m "' + escapedMessage + '"', {
+        stdio: ["inherit", "inherit", "inherit"],
+        encoding: "utf-8",
+      });
+
+      console.log(formatSuccess("\n✓ Changes committed successfully!"));
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+
+      // Enhanced error messages
+      if (errorMessage.includes("not a git repository")) {
+        throw new Error(
+          "Not a git repository. Initialize git first with: git init",
+        );
+      } else if (errorMessage.includes("no changes added to commit")) {
+        throw new Error(
+          options.add
+            ? "No changes to commit. Your working directory is clean."
+            : "No changes staged for commit. Use -a flag to auto-stage changes or git add to stage manually.",
+        );
+      } else if (errorMessage.includes("please tell me who you are")) {
+        throw new Error(
+          'Git user not configured. Run:\ngit config --global user.email "you@example.com"\ngit config --global user.name "Your Name"',
+        );
+      }
+
+      throw new Error(`Failed to commit changes: ${errorMessage}`);
     }
   }
 
   async generateCommitMessage(options: CommitOptions): Promise<void> {
     try {
-      const diff = await this.getGitDiff(options.staged);
+      // Check if we're in a git repository
+      try {
+        execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
+      } catch (error) {
+        throw new Error(
+          "Not a git repository. Initialize git first with: git init",
+        );
+      }
+
+      // If using auto-add, we'll get diff of all changes
+      const diff = await this.getGitDiff(options.add ? false : options.staged);
 
       if (!diff) {
-        console.log("No changes to commit");
+        console.log(formatInfo("No changes to commit"));
         return;
       }
 
-      const message = await this.generateMessage(diff);
+      const messages = await this.generateMessages(diff);
 
       if (options.interactive) {
-        // TODO: Add interactive mode
-        console.log("Suggested commit message:");
-        console.log(message);
+        const selectedMessage = await promptForCommitMessage(messages);
+        const confirmed = await confirmCommit(selectedMessage, diff);
+
+        if (confirmed) {
+          await this.commitChanges(selectedMessage, options);
+        } else {
+          console.log(formatInfo("Commit cancelled"));
+        }
       } else {
-        console.log(message);
+        // In non-interactive mode, commit the first message
+        await this.commitChanges(messages[0].message, options);
       }
     } catch (error) {
-      console.error("Error:", (error as Error).message);
+      const errorMsg =
+        error instanceof Error ? error.message : "An unknown error occurred";
+      console.error(formatError("\n✗ Error: ") + errorMsg);
       process.exit(1);
     }
   }

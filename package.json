@@ -1,13 +1,14 @@
 {
   "name": "commit",
-  "module": "index.ts",
+  "module": "src/index.ts",
+  "version": "1.0.0",
   "type": "module",
   "bin": {
-    "commit": "./src/index.ts"
+    "commit": "./src/cli.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile commit"
+    "build": "bun build src/cli.ts --compile --outfile commit"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -19,6 +20,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",
-    "commander": "^13.0.0"
+    "@types/inquirer": "^9.0.7",
+    "chalk": "^5.3.0",
+    "commander": "^13.0.0",
+    "inquirer": "^9.2.14",
+    "ora": "^8.0.1"
   }
 }
