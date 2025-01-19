@@ -3,11 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "clip": "./src/index.ts"
+    "commit": "./src/index.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile clip"
+    "build": "bun build src/index.ts --compile --outfile commit"
   },
   "devDependencies": {
     "@types/bun": "latest",
