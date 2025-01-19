@@ -15,6 +15,15 @@ export class CommitGenerator {
     });
   }
 
+  private async getGitDiff(staged: boolean): Promise<string> {
+    try {
+      const cmd = staged ? "git diff --staged" : "git diff";
+      return execSync(cmd).toString();
+    } catch (error) {
+      throw new Error(`Failed to get git diff: ${error}`);
+    }
+  }
+
   private async getRepoContext(): Promise<string> {
     try {
       const branch = execSync("git branch --show-current").toString().trim();
@@ -28,71 +37,86 @@ export class CommitGenerator {
   private async getRecentCommits(): Promise<string> {
     try {
       const commits = execSync("git log -3 --oneline").toString().trim();
-      return `Recent commits:\n${commits}\n`;
+      return commits;
     } catch {
       return "";
     }
   }
 
-  private async getGitDiff(staged: boolean): Promise<string> {
-    try {
-      const cmd = staged ? "git diff --staged" : "git diff";
-      return execSync(cmd).toString();
-    } catch (error) {
-      throw new Error(`Failed to get git diff: ${error}`);
-    }
+  private buildPrompt(
+    repoContext: string,
+    recentCommits: string,
+    diff: string,
+  ): string {
+    return `You are an expert git commit message generator tasked with creating concise, single-line conventional commit messages. Your goal is to analyze the provided repository context and git diff to produce an accurate and informative commit message.
+
+First, examine the following repository context and git diff:
+
+<repository_context>
+Current branch: ${repoContext}
+Recent commits:
+${recentCommits}
+</repository_context>
+
+<git_diff>
+${diff}
+</git_diff>
+
+Now, follow these steps to generate the commit message:
+
+1. Wrap your analysis in <commit_analysis> tags. In your analysis:
+   - List all modified files and summarize their changes
+   - Categorize each change into potential commit types (feat, fix, refactor, style, docs, test, chore, or perf)
+   - Identify the most specific scope based on the file paths and changes
+   - Evaluate if there are any breaking changes or security implications
+   - Draft 3-5 potential subject lines that capture the essence of the change
+   - Choose the best subject line and justify your choice
+
+2. Based on your analysis, create a commit message that adheres to the following rules:
+   - Use this format exactly: <type>(<scope>): <subject>
+   - The message MUST be a single line with no line breaks
+   - Use imperative mood in the subject (e.g., "add" not "added")
+   - Do not capitalize the first letter of the subject
+   - Do not end the subject with a period
+   - Be specific but concise (aim for 50 characters or less in the subject)
+   - Ensure the message is readable and meaningful
+
+3. Present your final commit message wrapped in <commit_message> tags.`;
   }
 
   private async generateMessage(diff: string): Promise<string> {
     try {
+      const repoContext = await this.getRepoContext();
+      const recentCommits = await this.getRecentCommits();
+      const prompt = this.buildPrompt(repoContext, recentCommits, diff);
+
       const response = await this.anthropic.messages.create({
         model: "claude-3-sonnet-20240229",
         max_tokens: 1000,
         messages: [
           {
-            role: "assistant",
-            content: `You are a commit message generator that creates concise, single-line conventional commit messages. Follow these rules:
-
-1. Always use this format exactly:
-   <type>(<scope>): <subject>
-
-2. Types (use the most significant one):
-   feat: new features
-   fix: bug fixes
-   refactor: code changes that neither fix bugs nor add features
-   style: formatting, semicolons, etc
-   docs: documentation only
-   test: adding/updating tests
-   chore: dependencies, build tasks
-   perf: performance improvements
-
-3. Strict Rules:
-   - MUST be a single line, no line breaks
-   - Use imperative: "add" not "added"
-   - No capitalization at start of description
-   - No period at end
-   - Be specific but concise
-   - Keep it readable and meaningful
-
-4. For multiple changes, pick the most important one and be specific
-   Example: "feat(auth): add google oauth login" not "feat: add multiple features"
-
-Analyze file paths and extensions for accurate scope.`,
-          },
-          {
             role: "user",
-            content: `Repository context:
-${await this.getRepoContext()}
-Recent commits:
-${await this.getRecentCommits()}
-
-Based on this git diff, generate a commit message following the above rules:
-${diff}`,
+            content: prompt,
           },
         ],
       });
 
-      return response.content;
+      // Extract the commit message from the response
+      const responseText = response.content.filter(
+        (block) => block.type === "text",
+      )[0]?.text;
+      if (!responseText) {
+        throw new Error("No response content found");
+      }
+
+      const match = responseText.match(
+        /<commit_message>(.*?)<\/commit_message>/s,
+      );
+      if (!match) {
+        throw new Error("No commit message found in response");
+      }
+
+      return match[1].trim();
     } catch (error) {
       throw new Error(`Failed to generate commit message: ${error}`);
     }
@@ -117,7 +141,7 @@ ${diff}`,
         console.log(message);
       }
     } catch (error) {
-      console.error("Error:", error.message);
+      console.error("Error:", (error as Error).message);
       process.exit(1);
     }
   }
