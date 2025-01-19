@@ -1,6 +1,5 @@
 # Commit - AI-Powered Git Commit Message Generator
 
-
 Commit is a command-line tool that leverages Claude AI to generate meaningful, conventional commit messages by analyzing your git diffs. It helps maintain consistent commit message formatting across your projects while saving time and ensuring clarity.
 
 ## Features
