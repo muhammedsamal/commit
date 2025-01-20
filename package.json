@@ -4,11 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "commit": "./src/cli.ts"
+    "commit": "./src/index.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/cli.ts --compile --outfile commit"
+    "build": "bun build src/index.ts --compile --outfile commit"
   },
   "devDependencies": {
     "@types/bun": "latest",

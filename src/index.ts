@@ -24,16 +24,16 @@ const displayHelp = () => {
   console.log(chalk.yellow.bold("\nExample Usage:"));
   console.log(chalk.dim("─────────────"));
   console.log(
-    `${chalk.cyan("$")} ${chalk.green("commit")}                    ${chalk.dim("# Generate commit message for staged changes")}`,
+    `${chalk.cyan("$")} ${chalk.green("commit")}                ${chalk.dim("# Generate commit message for staged changes")}`,
   );
   console.log(
-    `${chalk.cyan("$")} ${chalk.green("commit -a")}                ${chalk.dim("# Auto-stage and commit all changes")}`,
+    `${chalk.cyan("$")} ${chalk.green("commit -a")}             ${chalk.dim("# Auto-stage and commit all changes")}`,
   );
   console.log(
-    `${chalk.cyan("$")} ${chalk.green("commit -i")}                ${chalk.dim("# Use interactive mode")}`,
+    `${chalk.cyan("$")} ${chalk.green("commit -i")}             ${chalk.dim("# Use interactive mode")}`,
   );
   console.log(
-    `${chalk.cyan("$")} ${chalk.green("commit -a -i")}             ${chalk.dim("# Interactive mode with auto-staging")}\n`,
+    `${chalk.cyan("$")} ${chalk.green("commit -a -i")}          ${chalk.dim("# Interactive mode with auto-staging")}\n`,
   );
 };
 
@@ -44,28 +44,14 @@ displayBanner();
 program
   .name("commit")
   .description(chalk.yellow("Generate meaningful commit messages using AI"))
-  .version("0.1.0", "-v, --version", chalk.blue("Output the current version"));
-
-program
-  .command("commit")
-  .description(
-    chalk.yellow("Generate a conventional commit message from your changes"),
-  )
-  .option(
-    "-s, --staged",
-    chalk.dim("Use staged changes only (default: false)"),
-    false,
-  )
+  .version("0.1.0", "-v, --version", chalk.blue("Output the current version"))
+  .option("-a, --add", chalk.dim("Auto-stage all changes before commit"), false)
   .option(
     "-i, --interactive",
-    chalk.dim("Interactive mode with multiple suggestions (default: false)"),
+    chalk.dim("Interactive mode with multiple suggestions"),
     false,
   )
-  .option(
-    "-a, --add",
-    chalk.dim("Automatically stage all changes before commit (default: false)"),
-    false,
-  )
+  .option("-s, --staged", chalk.dim("Use staged changes only"), false)
   .action(async (options) => {
     try {
       const generator = new CommitGenerator();
