@@ -26,7 +26,7 @@ Commit is a command-line tool that leverages Claude AI to generate meaningful, c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/commit.git
+git clone https://github.com/muhammedsamal/commit.git
 cd commit
 ```
 
