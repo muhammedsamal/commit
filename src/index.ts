@@ -21,7 +21,7 @@ const displayBanner = () => {
 `),
   );
   console.log(chalk.dim("✨ AI-Powered Git Commit Message Generator ✨\n"));
-  console.log(chalk.white.bold("Version: ") + chalk.green("0.1.0"));
+  console.log(chalk.white.bold("Version: ") + chalk.green("1.0.1"));
   console.log(chalk.white.bold("Author: ") + chalk.green("Muhammed Samal"));
   console.log(chalk.white.bold("License: ") + chalk.green("MIT\n"));
 };
