@@ -8,11 +8,14 @@ import {
   formatError,
   formatInfo,
 } from "./cli-utils";
+import fetch from "node-fetch";
 
 type CommitOptions = {
   staged: boolean;
   interactive: boolean;
-  add: boolean; // New option for auto-staging
+  add: boolean;
+  useOllama?: boolean;
+  model?: string;
 };
 
 interface GeneratedCommit {
@@ -20,13 +23,31 @@ interface GeneratedCommit {
   analysis: string;
 }
 
-export class CommitGenerator {
-  private anthropic: Anthropic;
+interface ModelConfig {
+  type: "anthropic" | "ollama";
+  model: string;
+  apiKey?: string;
+  host?: string;
+  port?: number;
+}
 
-  constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+export class CommitGenerator {
+  private anthropic: Anthropic | null = null;
+  private config: ModelConfig;
+
+  constructor(config?: Partial<ModelConfig>) {
+    // Default configuration
+    this.config = {
+      type: "anthropic",
+      model: "claude-3-sonnet-20240229",
+      ...config,
+    };
+
+    if (this.config.type === "anthropic") {
+      this.anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY || this.config.apiKey,
+      });
+    }
   }
 
   private async getGitDiff(staged: boolean): Promise<string> {
@@ -57,18 +78,60 @@ export class CommitGenerator {
     }
   }
 
-  private async stageAllChanges(): Promise<void> {
+  private async generateWithOllama(prompt: string): Promise<string> {
+    const host = this.config.host || "http://localhost";
+    const port = this.config.port || 11434;
+    const model = this.config.model || "deepseek-r1:latest";
+
     try {
-      execSync("git add -A", {
-        stdio: "inherit",
-        encoding: "utf-8",
+      const response = await fetch(`${host}:${port}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          prompt,
+          stream: false,
+        }),
       });
-      console.log(formatSuccess("✓ All changes staged"));
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.response;
     } catch (error) {
-      throw new Error(
-        `Failed to stage changes: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      throw new Error(`Failed to generate with Ollama: ${error}`);
     }
+  }
+
+  private async generateWithAnthropic(prompt: string): Promise<string> {
+    if (!this.anthropic) {
+      throw new Error("Anthropic client not initialized");
+    }
+
+    const response = await this.anthropic.messages.create({
+      model: this.config.model,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    const responseText = response.content.filter(
+      (block) => block.type === "text",
+    )[0]?.text;
+
+    if (!responseText) {
+      throw new Error("No response content found");
+    }
+
+    return responseText;
   }
 
   private buildPrompt(
@@ -118,26 +181,12 @@ Now, follow these steps to generate commit messages:
 
       spinner.start("Generating commit messages...");
 
-      const response = await this.anthropic.messages.create({
-        model: "claude-3-sonnet-20240229",
-        max_tokens: 1000,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      });
+      const responseText =
+        this.config.type === "ollama"
+          ? await this.generateWithOllama(prompt)
+          : await this.generateWithAnthropic(prompt);
 
       spinner.succeed("Generated commit messages");
-
-      const responseText = response.content.filter(
-        (block) => block.type === "text",
-      )[0]?.text;
-
-      if (!responseText) {
-        throw new Error("No response content found");
-      }
 
       // Extract analysis
       const analysisMatch = responseText.match(
@@ -171,7 +220,6 @@ Now, follow these steps to generate commit messages:
     options: CommitOptions,
   ): Promise<void> {
     try {
-      // Auto-stage if requested
       if (options.add) {
         execSync("git add -A", {
           stdio: ["inherit", "inherit", "inherit"],
@@ -180,7 +228,6 @@ Now, follow these steps to generate commit messages:
         console.log(formatSuccess("✓ All changes staged"));
       }
 
-      // Check for staged changes
       const stagedChanges = execSync(
         'git diff --staged --quiet || echo "has changes"',
         {
@@ -194,7 +241,6 @@ Now, follow these steps to generate commit messages:
         );
       }
 
-      // Properly escape the commit message
       const escapedMessage = message.replace(/"/g, '\\"');
 
       execSync('git commit -m "' + escapedMessage + '"', {
@@ -207,7 +253,6 @@ Now, follow these steps to generate commit messages:
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
 
-      // Enhanced error messages
       if (errorMessage.includes("not a git repository")) {
         throw new Error(
           "Not a git repository. Initialize git first with: git init",
@@ -230,7 +275,6 @@ Now, follow these steps to generate commit messages:
 
   async generateCommitMessage(options: CommitOptions): Promise<void> {
     try {
-      // Check if we're in a git repository
       try {
         execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
       } catch (error) {
@@ -239,12 +283,19 @@ Now, follow these steps to generate commit messages:
         );
       }
 
-      // If using auto-add, we'll get diff of all changes
       const diff = await this.getGitDiff(options.add ? false : options.staged);
 
       if (!diff) {
         console.log(formatInfo("No changes to commit"));
         return;
+      }
+
+      // Update config if options specify different model
+      if (options.useOllama) {
+        this.config.type = "ollama";
+        if (options.model) {
+          this.config.model = options.model;
+        }
       }
 
       const messages = await this.generateMessages(diff);
@@ -259,7 +310,6 @@ Now, follow these steps to generate commit messages:
           console.log(formatInfo("Commit cancelled"));
         }
       } else {
-        // In non-interactive mode, commit the first message
         await this.commitChanges(messages[0].message, options);
       }
     } catch (error) {
