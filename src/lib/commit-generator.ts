@@ -81,7 +81,7 @@ export class CommitGenerator {
   private async generateWithOllama(prompt: string): Promise<string> {
     const host = this.config.host || "http://localhost";
     const port = this.config.port || 11434;
-    const model = this.config.model || "deepseek-r1:latest";
+    const model = this.config.model || "codellama:7b-instruct";
 
     try {
       const response = await fetch(`${host}:${port}/api/generate`, {
