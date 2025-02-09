@@ -388,9 +388,7 @@ Now, follow these steps to generate commit messages:
 
       if (options.interactive) {
         const selectedMessage = await promptForCommitMessage(messages);
-        const confirmed = await confirmCommit(selectedMessage, diff);
-
-        if (confirmed) {
+        if (selectedMessage) {
           await this.commitChanges(selectedMessage, options);
         } else {
           console.log(formatInfo("Commit cancelled"));
