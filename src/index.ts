@@ -67,11 +67,11 @@ program
   .name("commit")
   .description(chalk.yellow("Generate meaningful commit messages using AI"))
   .version("0.1.0", "-v, --version", chalk.blue("Output the current version"))
-  .option("-a, --add", chalk.dim("Auto-stage all changes before commit"), false)
+  .option("-a, --add", chalk.dim("Auto-stage all changes before commit"), true)
   .option(
     "-i, --interactive",
     chalk.dim("Interactive mode with multiple suggestions"),
-    false,
+    true,
   )
   .option("-s, --staged", chalk.dim("Use staged changes only"), false)
   .option(
