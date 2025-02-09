@@ -20,7 +20,7 @@ export interface CommitChoice {
 }
 
 export interface Config {
-  type: "anthropic" | "ollama";
+  type: "anthropic" | "ollama" | "gemini";
   model: string;
   apiKey?: string;
   host?: string;
@@ -29,10 +29,8 @@ export interface Config {
 
 export function loadConfig(): Config {
   const defaultConfig: Config = {
-    type: "ollama",
-    model: "deepseek-r1:latest",
-    host: "http://localhost",
-    port: 11434,
+    type: "gemini",
+    model: "gemini-2.0-flash",
   };
 
   try {
@@ -138,6 +136,7 @@ export async function setupConfig(): Promise<Config> {
       choices: [
         { name: "Anthropic (Claude)", value: "anthropic" },
         { name: "Ollama (Local)", value: "ollama" },
+        { name: "Gemini", value: "gemini" },
       ],
       default: currentConfig.type,
     },
@@ -218,6 +217,17 @@ export async function setupConfig(): Promise<Config> {
       host,
       port: parseInt(port),
     };
+  } else if (type === "gemini") {
+    const { model } = await inquirer.prompt([
+      {
+        type: "input",
+        name: "model",
+        message: "Enter Gemini model name:",
+        default: currentConfig.model || "gemini-2.0-flash",
+      },
+    ]);
+
+    config.model = model;
   }
 
   await saveConfig(config);
@@ -248,6 +258,11 @@ export async function checkModelAvailability(config: Config): Promise<boolean> {
   // For Anthropic, we'll check if the API key is available
   if (config.type === "anthropic") {
     return !!(config.apiKey || process.env.ANTHROPIC_API_KEY);
+  }
+
+  // For Gemini, we'll assume the model is available
+  if (config.type === "gemini") {
+    return true;
   }
 
   return false;

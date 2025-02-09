@@ -9,6 +9,7 @@ import {
   formatInfo,
 } from "./cli-utils";
 import fetch from "node-fetch";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 type CommitOptions = {
   staged: boolean;
@@ -24,7 +25,7 @@ interface GeneratedCommit {
 }
 
 interface ModelConfig {
-  type: "anthropic" | "ollama";
+  type: "anthropic" | "ollama" | "gemini";
   model: string;
   apiKey?: string;
   host?: string;
@@ -33,13 +34,14 @@ interface ModelConfig {
 
 export class CommitGenerator {
   private anthropic: Anthropic | null = null;
+  private genAI: GoogleGenerativeAI | null = null;
   private config: ModelConfig;
 
   constructor(config?: Partial<ModelConfig>) {
     // Default configuration
     this.config = {
-      type: "anthropic",
-      model: "claude-3-sonnet-20240229",
+      type: "gemini",
+      model: "gemini-2.0-flash",
       ...config,
     };
 
@@ -47,6 +49,8 @@ export class CommitGenerator {
       this.anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY || this.config.apiKey,
       });
+    } else if (this.config.type === "gemini") {
+      this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || this.config.apiKey || "");
     }
   }
 
@@ -134,6 +138,80 @@ export class CommitGenerator {
     return responseText;
   }
 
+  private async generateWithGemini(prompt: string): Promise<GeneratedCommit> {
+    if (!this.genAI) {
+      throw new Error("Gemini client not initialized");
+    }
+
+    const model = this.genAI.getGenerativeModel({ model: this.config.model });
+    const generationConfig = {
+      temperature: 1,
+      topP: 0.95,
+      topK: 40,
+      maxOutputTokens: 8192,
+    };
+
+    const chatSession = model.startChat({
+      generationConfig,
+      history: [],
+    });
+
+    const diff = prompt;
+
+    const chatPrompt = `You are an expert developer analyzing git diffs to generate commit messages. Your response must be in valid JSON format only.
+
+Input Git Diff:
+${diff}
+
+IMPORTANT: You must respond with ONLY a valid JSON object in this exact format:
+{
+  "message": "type(scope): description",
+}
+
+Do not include any other text, markdown formatting, or explanation. The response must be parseable JSON.`;
+
+    const result = await chatSession.sendMessage(chatPrompt);
+    const response = result.response.text();
+    
+    try {
+      // Clean up the response by removing markdown code block syntax
+      const cleanedResponse = response.replace(/^```(?:json)?\n?|\n?```$/g, '').trim();
+      let parsedResponse;
+      
+      try {
+        parsedResponse = JSON.parse(cleanedResponse);
+      } catch (e) {
+        // If JSON parsing fails, try to extract the commit message and create JSON
+        const lines = cleanedResponse.split('\n').filter(line => line.trim());
+        if (lines.length > 0) {
+          parsedResponse = {
+            message: lines[0].trim()
+          };
+        } else {
+          throw new Error('Could not parse response into valid format');
+        }
+      }
+      
+      // Validate the response structure
+      if (!parsedResponse.message) {
+        throw new Error("Invalid response format from Gemini: missing message field");
+      }
+
+      // Convert details field to analysis if present
+      const analysis = parsedResponse.details ? 
+        (Array.isArray(parsedResponse.details) ? parsedResponse.details.join('\n') : parsedResponse.details) :
+        'No analysis provided';
+      
+      return {
+        message: parsedResponse.message,
+        analysis
+      } as GeneratedCommit;
+    } catch (error: unknown) {
+      console.error("Raw Gemini response:", response);
+      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private buildPrompt(
     repoContext: string,
     recentCommits: string,
@@ -181,10 +259,18 @@ Now, follow these steps to generate commit messages:
 
       spinner.start("Generating commit messages...");
 
-      const responseText =
-        this.config.type === "ollama"
-          ? await this.generateWithOllama(prompt)
-          : await this.generateWithAnthropic(prompt);
+      let responseText: string;
+      
+      if (this.config.type === "ollama") {
+        responseText = await this.generateWithOllama(prompt);
+      } else if (this.config.type === "anthropic") {
+        responseText = await this.generateWithAnthropic(prompt);
+      } else if (this.config.type === "gemini") {
+        const response = await this.generateWithGemini(diff);
+        return [response];
+      } else {
+        throw new Error("Unsupported model type");
+      }
 
       spinner.succeed("Generated commit messages");
 
