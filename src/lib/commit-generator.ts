@@ -334,7 +334,9 @@ Now, follow these steps to generate commit messages:
         encoding: "utf-8",
       });
 
+      spinner.stop();
       console.log(formatSuccess("\n✓ Changes committed successfully!"));
+      process.exit(0);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
