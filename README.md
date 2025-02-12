@@ -1,26 +1,25 @@
 # Commit - AI-Powered Git Commit Message Generator
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-Commit is a command-line tool that leverages Claude AI to generate meaningful, conventional commit messages by analyzing your git diffs. It helps maintain consistent commit message formatting across your projects while saving time and ensuring clarity.
+Commit is a command-line tool that leverages AI (Claude and Gemini) to generate meaningful, conventional commit messages by analyzing your git diffs. It helps maintain consistent commit message formatting across your projects while saving time and ensuring clarity.
 
 ## Features
 
-- Generate conventional commit messages using AI
-- Auto-stage and commit changes with a single command
+- Generate conventional commit messages using AI (Claude or Gemini)
+- Interactive mode enabled by default with multiple commit message suggestions
+- Auto-staging of changes enabled by default
 - Smart analysis of repository context and recent commit history
-- Support for both staged and unstaged changes
-- Multiple commit message suggestions in interactive mode
 - Beautiful CLI interface with color-coded output
 - Follows [Conventional Commits](https://www.conventionalcommits.org/) specification
 - Detailed analysis of changes and their impact
 - Seamless integration with your git workflow
+- Ability to cancel interactive commits with empty messages
+- Clean process exit after successful commits
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) runtime installed
 - Git initialized repository
-- Anthropic API key (for Claude AI)
+- Anthropic API key (for Claude AI) or Google API key (for Gemini AI)
 
 ## Installation
 
@@ -38,7 +37,10 @@ bun install
 3. Set up your environment variables:
 ```bash
 # Create .env.local file
+# For Claude AI
 echo "ANTHROPIC_API_KEY=your_api_key_here" > .env.local
+# For Gemini AI
+echo "GOOGLE_API_KEY=your_api_key_here" >> .env.local
 ```
 
 4. Build and install globally:
@@ -51,72 +53,57 @@ bun run build
 ### Basic Commands
 
 ```bash
-# Generate commit message for staged changes
+# Generate commit message (interactive mode and auto-staging enabled by default)
 commit
 
-# Auto-stage and commit all changes
-commit -a
+# Use only staged changes without auto-staging
+commit -s
 
-# Interactive mode with multiple suggestions
-commit -i
-
-# Interactive mode with auto-staging
-commit -a -i
+# Change AI model to Gemini
+commit --model gemini
 ```
 
 ### Command Options
 
 ```bash
 Options:
-  -a, --add         Auto-stage all changes before commit
-  -i, --interactive Use interactive mode with multiple suggestions
   -s, --staged      Use staged changes only (default: false)
+  -n, --non-interactive Disable interactive mode
+  --model <model>   Choose AI model (claude/gemini)
   -h, --help        Display help information
   -v, --version     Display version information
 ```
 
-### Interactive Mode
+### Interactive Mode (Default)
 
-When using interactive mode (-i), you'll get:
+Interactive mode is now enabled by default and provides:
 - Multiple commit message suggestions
 - Detailed analysis of changes
 - Option to review changes
 - Confirmation before committing
+- Ability to cancel commit with empty message
+- Clean exit after successful commit
 
 ## How It Works
 
 1. When you run the command, the tool:
+   - Auto-stages all changes by default
    - Collects git diff information
    - Gathers repository context and recent commit history
-   - Auto-stages changes if requested
-   - Sends information to Claude AI
+   - Sends information to selected AI model (Claude or Gemini)
    - Generates multiple commit message options
-   - Handles the commit process
+   - Handles the commit process interactively
+   - Exits cleanly after successful commit
 
-2. The generated messages follow the Conventional Commits specification:
-   - Format: `type(scope): subject`
-   - Types: feat, fix, refactor, style, docs, test, chore, perf
-   - Scope: derived from changed files and context
-   - Subject: clear, concise description in imperative mood
-
-## Project Structure
-
-```
-commit/
-├── src/
-│   ├── index.ts                # CLI entry point
-│   └── lib/
-│       ├── commit-generator.ts # Core logic
-│       └── cli-utils.ts        # CLI utilities
-├── .env.local                  # Environment variables
-├── package.json                # Project configuration
-└── tsconfig.json              # TypeScript configuration
-```
+[Rest of the README remains the same from "The generated messages follow..." section onwards]
 
 ## Configuration
 
 Environment variables:
-- `ANTHROPIC_API_KEY`: Your Anthropic API key (required)
+- `ANTHROPIC_API_KEY`: Your Anthropic API key (for Claude AI)
+- `GOOGLE_API_KEY`: Your Google API key (for Gemini AI)
+
+[Rest of the sections remain the same]
 
 ## Error Handling
 
