@@ -5,7 +5,7 @@ Generate conventional commit messages using AI. Super fast with quick mode.
 ## Installation
 
 ```bash
-bun install -g commit
+bun install -g @muhammedsamal/commit
 ```
 
 ## Quick Start
