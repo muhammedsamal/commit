@@ -4,7 +4,8 @@ Commit is a command-line tool that leverages AI to generate meaningful, conventi
 
 ## ✨ Features
 
-- Generate conventional commit messages using AI (OpenAI, Anthropic, Google, Groq)
+- **Quick Mode** - Lightning-fast commits with `-q` flag using Groq's Llama 4 Scout model
+- Generate conventional commit messages using AI (Groq, Google, OpenAI, Anthropic)
 - Auto-stage and commit changes with a single command
 - Smart analysis of repository context and recent commit history
 - Support for both staged and unstaged changes
@@ -12,6 +13,7 @@ Commit is a command-line tool that leverages AI to generate meaningful, conventi
 - Beautiful CLI interface with color-coded output
 - Follows [Conventional Commits](https://www.conventionalcommits.org/) specification
 - Detailed analysis of changes and their impact
+- Environment variable support for secure API key management
 - Seamless integration with your git workflow
 
 ## 🚀 Installation
@@ -41,9 +43,26 @@ That's it! The tool will remember your preferences.
 
 ## 🛠️ Usage
 
+### Quick Workflow (Recommended)
+
+Perfect for rapid development when you trust the AI to generate good commit messages:
+
+```bash
+# Make your changes...
+# Then just run:
+commit -q
+
+# Example output:
+# feat(auth): add JWT token validation middleware
+# ✓ Changes committed successfully!
+```
+
 ### Basic Commands
 
 ```bash
+# Quick mode - analyze all changes and auto-commit (fastest)
+commit -q
+
 # Generate commit message for staged changes
 commit
 
@@ -61,6 +80,7 @@ commit -a -i
 
 ```bash
 Options:
+  -q, --quick       Quick mode: analyze all changes and auto-commit with Groq
   -a, --add         Auto-stage all changes before commit
   -i, --interactive Use interactive mode with multiple suggestions
   -s, --staged      Use staged changes only (default: false)
@@ -77,18 +97,27 @@ commit config
 
 ## 🤖 Supported AI Providers
 
-- **Groq** - Fast inference, free tier available (Default)
+- **Groq** - Fast inference with Llama 4 Scout, free tier available (Default for quick mode)
 - **Google Gemini** - Free tier available
 - **OpenAI GPT** - Paid service
 - **Anthropic Claude** - Paid service
 
+### Quick Mode Details
+
+The `-q` flag uses Groq's `meta-llama/llama-4-scout-17b-16e-instruct` model for:
+- ⚡ **Ultra-fast** commit generation (no setup required)
+- 🔍 **Analyzes all changes** (both staged and unstaged)
+- 🚀 **Auto-commits** without confirmation prompts
+- 📝 **Clean output** (shows only the commit message)
+- 🔐 **Requires only** `GROQ_API_KEY` environment variable
+
 ## 🔧 Environment Variables
 
-The recommended way is to set API keys in your shell profile (`.zshrc`, `.bashrc`, etc.):
+The tool now prioritizes environment variables over stored configuration for better security. Set API keys in your shell profile (`.zshrc`, `.bashrc`, etc.):
 
 ```bash
 # Add to your ~/.zshrc or ~/.bashrc
-export GROQ_API_KEY="your_groq_api_key_here"
+export GROQ_API_KEY="your_groq_api_key_here"          # Required for quick mode
 export OPENAI_API_KEY="your_openai_api_key_here"
 export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
 export GOOGLE_GENERATIVE_AI_API_KEY="your_google_api_key_here"
@@ -98,20 +127,30 @@ source ~/.zshrc  # or source ~/.bashrc
 ```
 
 Available environment variables:
-- `GROQ_API_KEY` - For Groq (Default provider)
+- `GROQ_API_KEY` - For Groq and quick mode (Recommended)
 - `OPENAI_API_KEY` - For OpenAI
 - `ANTHROPIC_API_KEY` - For Anthropic
 - `GOOGLE_GENERATIVE_AI_API_KEY` - For Google Gemini
 
-If environment variables are set, the tool will use them automatically without needing to store API keys in the config.
+**Note**: Environment variables are automatically detected and used - no configuration needed!
 
 ## 📝 How It Works
 
+### Standard Mode
 1. Analyzes your git diff and repository context
 2. Sends information to your chosen AI provider
 3. Generates conventional commit messages following best practices
 4. Provides multiple options in interactive mode
-5. Commits your changes with the selected message
+5. Shows analysis and asks for confirmation
+6. Commits your changes with the selected message
+
+### Quick Mode (`-q`)
+1. 🔍 **Analyzes ALL changes** (staged + unstaged)
+2. ⚡ **Uses Groq Llama 4 Scout** for ultra-fast generation
+3. 📝 **Shows only the commit message**
+4. 🚀 **Auto-stages and commits immediately**
+
+### Commit Message Format
 
 Generated messages follow the Conventional Commits specification:
 - Format: `type(scope): subject`
