@@ -1,14 +1,44 @@
 {
-  "name": "commit",
-  "module": "src/index.ts",
+  "name": "@muhammedsamal/commit",
   "version": "1.0.1",
+  "description": "AI-powered git commit message generator with lightning-fast quick mode",
   "type": "module",
   "bin": {
     "commit": "./index.ts"
   },
+  "main": "src/index.ts",
+  "module": "src/index.ts",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile commit"
+    "build": "bun build src/index.ts --compile --outfile commit",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "conventional-commits",
+    "groq",
+    "cli",
+    "automation"
+  ],
+  "author": "Muhammed Samal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muhammedsamal/commit.git"
+  },
+  "homepage": "https://github.com/muhammedsamal/commit",
+  "bugs": {
+    "url": "https://github.com/muhammedsamal/commit/issues"
+  },
+  "files": [
+    "src/",
+    "index.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/bun": "latest",
