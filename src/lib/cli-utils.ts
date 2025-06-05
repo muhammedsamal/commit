@@ -19,22 +19,30 @@ export interface CommitChoice {
   analysis: string;
 }
 
+export type ProviderType = "openai" | "anthropic" | "google" | "groq";
+
 export interface Config {
-  type: "anthropic" | "ollama" | "gemini";
+  provider: ProviderType;
   model: string;
   apiKey?: string;
-  host?: string;
-  port?: number;
+}
+
+function getConfigPath(): string {
+  return path.join(os.homedir(), ".commitrc");
+}
+
+export function isFirstRun(): boolean {
+  return !fs.existsSync(getConfigPath());
 }
 
 export function loadConfig(): Config {
   const defaultConfig: Config = {
-    type: "gemini",
-    model: "gemini-2.0-flash",
+    provider: "groq",
+    model: "meta-llama/llama-4-scout-17b-16e-instruct",
   };
 
   try {
-    const configPath = path.join(os.homedir(), ".commitrc");
+    const configPath = getConfigPath();
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
       return { ...defaultConfig, ...config };
@@ -48,13 +56,106 @@ export function loadConfig(): Config {
 
 export async function saveConfig(config: Config): Promise<void> {
   try {
-    const configPath = path.join(os.homedir(), ".commitrc");
+    const configPath = getConfigPath();
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
     console.log(formatSuccess("Configuration saved successfully"));
   } catch (error) {
     console.error(formatError("Failed to save configuration"));
     throw error;
   }
+}
+
+export async function firstRunSetup(): Promise<Config> {
+  console.log(chalk.cyan.bold("\n🎉 Welcome to Commit!"));
+  console.log(chalk.dim("Let's get you set up with an AI provider to generate commit messages.\n"));
+
+  const { provider } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "provider",
+      message: "Which AI provider would you like to use?",
+      choices: [
+        { 
+          name: "Groq (Fast, Free tier available) [Default]", 
+          value: "groq",
+          short: "Groq"
+        },
+        { 
+          name: "Google Gemini (Free tier available)", 
+          value: "google",
+          short: "Google"
+        },
+        { 
+          name: "OpenAI GPT (Paid)", 
+          value: "openai",
+          short: "OpenAI"
+        },
+        { 
+          name: "Anthropic Claude (Paid)", 
+          value: "anthropic",
+          short: "Anthropic"
+        },
+      ],
+    },
+  ]);
+
+  // Get API key from environment variables
+  const envKeyMap = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY", 
+    google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    groq: "GROQ_API_KEY",
+  };
+
+  const providerNames = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    google: "Google",
+    groq: "Groq",
+  };
+
+  console.log(chalk.yellow(`\n📋 Make sure you have set the ${envKeyMap[provider as keyof typeof envKeyMap]} environment variable.`));
+  console.log(chalk.dim(`You can add it to your .zshrc file: export ${envKeyMap[provider as keyof typeof envKeyMap]}=your_api_key_here\n`));
+
+  // Get model selection
+  const modelChoices = {
+    openai: [
+      { name: "GPT-4.1 Mini", value: "gpt-4.1-mini" },
+    ],
+    anthropic: [
+      { name: "Claude 3.5 Sonnet", value: "claude-3-5-sonnet-20241022" },
+    ],
+    google: [
+      { name: "Gemini 2.0 Flash (Experimental)", value: "gemini-2.0-flash-001" },
+    ],
+    groq: [
+      { name: "Llama 4 Scout 17B", value: "meta-llama/llama-4-scout-17b-16e-instruct" },
+      { name: "Llama 3.1 70B Versatile", value: "llama-3.1-70b-versatile" },
+      { name: "Llama 3.1 8B Instant", value: "llama-3.1-8b-instant" },
+    ],
+  };
+
+      const { model } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "model",
+        message: `Select ${providerNames[provider as keyof typeof providerNames]} model:`,
+        choices: modelChoices[provider as keyof typeof modelChoices],
+      },
+    ]);
+
+  const config: Config = {
+    provider,
+    model,
+  };
+
+  await saveConfig(config);
+  
+  console.log(chalk.green.bold("\n✅ Setup complete!"));
+  console.log(chalk.dim("You can now use 'commit' to generate commit messages."));
+  console.log(chalk.dim("Run 'commit config' anytime to change your settings.\n"));
+
+  return config;
 }
 
 export async function promptForCommitMessage(
@@ -102,7 +203,7 @@ export async function confirmCommit(
   diff: string,
 ): Promise<boolean> {
   console.log("\nChanges to be committed:");
-  console.log(chalk.dim(diff));
+  console.log(chalk.dim(diff.slice(0, 500) + (diff.length > 500 ? "..." : "")));
 
   console.log("\nCommit message:");
   console.log(chalk.yellow(message));
@@ -128,175 +229,86 @@ export function displayGenerationError(error: Error): void {
 export async function setupConfig(): Promise<Config> {
   const currentConfig = loadConfig();
 
-  const { type } = await inquirer.prompt([
+  const { provider } = await inquirer.prompt([
     {
       type: "list",
-      name: "type",
-      message: "Select the model type:",
+      name: "provider",
+      message: "Select the AI provider:",
       choices: [
+        { name: "Google (Gemini)", value: "google" },
+        { name: "OpenAI (GPT)", value: "openai" },
         { name: "Anthropic (Claude)", value: "anthropic" },
-        { name: "Ollama (Local)", value: "ollama" },
-        { name: "Gemini", value: "gemini" },
+        { name: "Groq (Fast inference)", value: "groq" },
       ],
-      default: currentConfig.type,
+      default: currentConfig.provider,
     },
   ]);
 
   let config: Config = {
-    type,
+    provider,
     model: currentConfig.model,
   };
 
-  if (type === "anthropic") {
-    const { apiKey } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "apiKey",
-        message:
-          "Enter your Anthropic API key (or leave empty to use ANTHROPIC_API_KEY env variable):",
-        default: currentConfig.apiKey || "",
-      },
-    ]);
+  // API keys will be read from environment variables
+  const envKeyMap = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY", 
+    google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    groq: "GROQ_API_KEY",
+  };
 
-    if (apiKey) {
-      config.apiKey = apiKey;
-    }
+  console.log(chalk.yellow(`\n📋 Make sure you have set the ${envKeyMap[provider as keyof typeof envKeyMap]} environment variable.`));
+  console.log(chalk.dim(`You can add it to your .zshrc file: export ${envKeyMap[provider as keyof typeof envKeyMap]}=your_api_key_here\n`));
 
-    const { model } = await inquirer.prompt([
-      {
-        type: "list",
-        name: "model",
-        message: "Select Claude model:",
-        choices: [
-          { name: "Claude 3 Sonnet", value: "claude-3-sonnet-20240229" },
-          { name: "Claude 3 Opus", value: "claude-3-opus-20240229" },
-        ],
-        default: currentConfig.model,
-      },
-    ]);
+  // Get model selection
+  const modelChoices = {
+    openai: [
+      { name: "GPT-4.1 Mini", value: "gpt-4.1-mini" },
+    ],
+    anthropic: [
+      { name: "Claude 3.5 Sonnet", value: "claude-3-5-sonnet-20241022" },
+    ],
+    google: [
+      { name: "Gemini 2.0 Flash (Experimental)", value: "gemini-2.0-flash-001" },
+    ],
+    groq: [
+      { name: "Llama 4 Scout 17B", value: "meta-llama/llama-4-scout-17b-16e-instruct" },
+      { name: "Llama 3.1 70B Versatile", value: "llama-3.1-70b-versatile" },
+      { name: "Llama 3.1 8B Instant", value: "llama-3.1-8b-instant" },
+    ],
+  };
 
-    config.model = model;
-  } else if (type === "ollama") {
-    const { model } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "model",
-        message: "Enter Ollama model name:",
-        default: currentConfig.model || "deepseek-coder:6.7b",
-      },
-    ]);
+  const { model } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "model",
+      message: `Select ${provider} model:`,
+      choices: modelChoices[provider as keyof typeof modelChoices],
+      default: currentConfig.model,
+    },
+  ]);
 
-    const { host } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "host",
-        message: "Enter Ollama host:",
-        default: currentConfig.host || "http://localhost",
-      },
-    ]);
-
-    const { port } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "port",
-        message: "Enter Ollama port:",
-        default: currentConfig.port || 11434,
-        validate: (value) => {
-          const port = parseInt(value);
-          if (isNaN(port) || port < 1 || port > 65535) {
-            return "Please enter a valid port number (1-65535)";
-          }
-          return true;
-        },
-      },
-    ]);
-
-    config = {
-      ...config,
-      model,
-      host,
-      port: parseInt(port),
-    };
-  } else if (type === "gemini") {
-    const { model } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "model",
-        message: "Enter Gemini model name:",
-        default: currentConfig.model || "gemini-2.0-flash",
-      },
-    ]);
-
-    config.model = model;
-  }
+  config.model = model;
 
   await saveConfig(config);
   return config;
 }
 
-export async function checkModelAvailability(config: Config): Promise<boolean> {
-  if (config.type === "ollama") {
-    try {
-      const response = await fetch(`${config.host}:${config.port}/api/tags`);
-      if (!response.ok) {
-        throw new Error("Failed to connect to Ollama");
-      }
+export async function ensureApiKey(config: Config): Promise<void> {
+  const envKeyMap = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    google: "GOOGLE_GENERATIVE_AI_API_KEY", 
+    groq: "GROQ_API_KEY",
+  };
 
-      const data = await response.json();
-      const models = data.models || [];
-      return models.some((m: any) => m.name === config.model);
-    } catch (error) {
-      console.error(
-        formatError(
-          `Failed to connect to Ollama at ${config.host}:${config.port}`,
-        ),
-      );
-      return false;
-    }
-  }
+  const envKey = envKeyMap[config.provider];
+  const hasEnvKey = !!process.env[envKey];
+  const hasConfigKey = !!config.apiKey;
 
-  // For Anthropic, we'll check if the API key is available
-  if (config.type === "anthropic") {
-    return !!(config.apiKey || process.env.ANTHROPIC_API_KEY);
-  }
-
-  // For Gemini, we'll assume the model is available
-  if (config.type === "gemini") {
-    return true;
-  }
-
-  return false;
-}
-
-export async function ensureModelAvailable(config: Config): Promise<void> {
-  if (!(await checkModelAvailability(config))) {
-    if (config.type === "ollama") {
-      console.log(
-        formatInfo(`Model ${config.model} not found. Pulling from Ollama...`),
-      );
-      try {
-        const response = await fetch(`${config.host}:${config.port}/api/pull`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: config.model,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to pull model: ${response.statusText}`);
-        }
-
-        console.log(formatSuccess(`Successfully pulled ${config.model}`));
-      } catch (error) {
-        throw new Error(`Failed to pull model ${config.model}: ${error}`);
-      }
-    } else {
-      throw new Error(
-        'No valid API key found for Anthropic. Please run "commit config" to set up your configuration.',
-      );
-    }
+  if (!hasEnvKey && !hasConfigKey) {
+    throw new Error(
+      `No API key found for ${config.provider}. Please set ${envKey} environment variable or run 'commit config' to configure it.`
+    );
   }
 }

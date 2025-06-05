@@ -1,12 +1,10 @@
 # Commit - AI-Powered Git Commit Message Generator
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Commit is a command-line tool that leverages AI to generate meaningful, conventional commit messages by analyzing your git diffs. It helps maintain consistent commit message formatting across your projects while saving time and ensuring clarity.
 
-Commit is a command-line tool that leverages Claude AI to generate meaningful, conventional commit messages by analyzing your git diffs. It helps maintain consistent commit message formatting across your projects while saving time and ensuring clarity.
+## ✨ Features
 
-## Features
-
-- Generate conventional commit messages using AI
+- Generate conventional commit messages using AI (OpenAI, Anthropic, Google, Groq)
 - Auto-stage and commit changes with a single command
 - Smart analysis of repository context and recent commit history
 - Support for both staged and unstaged changes
@@ -16,37 +14,32 @@ Commit is a command-line tool that leverages Claude AI to generate meaningful, c
 - Detailed analysis of changes and their impact
 - Seamless integration with your git workflow
 
-## Prerequisites
+## 🚀 Installation
 
+### Prerequisites
 - [Bun](https://bun.sh) runtime installed
-- Git initialized repository
-- Anthropic API key (for Claude AI)
+- Git repository initialized
+- API key for your chosen AI provider
 
-## Installation
+### Install globally using Bun:
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/muhammedsamal/commit.git
-cd commit
+bun install -g commit
 ```
 
-2. Install dependencies:
-```bash
-bun install
-```
+That's it! The `commit` command is now available globally in your terminal.
 
-3. Set up your environment variables:
-```bash
-# Create .env.local file
-echo "ANTHROPIC_API_KEY=your_api_key_here" > .env.local
-```
+## 🎯 First Run Setup
 
-4. Build and install globally:
-```bash
-bun run build
-```
+The first time you run `commit`, it will guide you through a quick setup:
 
-## Usage
+1. Choose your AI provider (Google Gemini, OpenAI, Anthropic, or Groq)
+2. Enter your API key (or configure environment variable)
+3. Select your preferred model
+
+That's it! The tool will remember your preferences.
+
+## 🛠️ Usage
 
 ### Basic Commands
 
@@ -75,74 +68,64 @@ Options:
   -v, --version     Display version information
 ```
 
-### Interactive Mode
-
-When using interactive mode (-i), you'll get:
-- Multiple commit message suggestions
-- Detailed analysis of changes
-- Option to review changes
-- Confirmation before committing
-
-## How It Works
-
-1. When you run the command, the tool:
-   - Collects git diff information
-   - Gathers repository context and recent commit history
-   - Auto-stages changes if requested
-   - Sends information to Claude AI
-   - Generates multiple commit message options
-   - Handles the commit process
-
-2. The generated messages follow the Conventional Commits specification:
-   - Format: `type(scope): subject`
-   - Types: feat, fix, refactor, style, docs, test, chore, perf
-   - Scope: derived from changed files and context
-   - Subject: clear, concise description in imperative mood
-
-## Project Structure
-
-```
-commit/
-├── src/
-│   ├── index.ts                # CLI entry point
-│   └── lib/
-│       ├── commit-generator.ts # Core logic
-│       └── cli-utils.ts        # CLI utilities
-├── .env.local                  # Environment variables
-├── package.json                # Project configuration
-└── tsconfig.json              # TypeScript configuration
-```
-
-## Configuration
-
-Environment variables:
-- `ANTHROPIC_API_KEY`: Your Anthropic API key (required)
-
-## Error Handling
-
-The tool provides helpful error messages for common issues:
-- Not a git repository
-- No staged changes
-- Git user not configured
-- API key missing
-- Network issues
-- Invalid commands
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the Project
-2. Create your Feature Branch: `git checkout -b feature/amazing-feature`
-3. Commit your Changes: `git commit -am 'feat: add amazing feature'`
-4. Push to the Branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## Development
-
-To start development:
+### Configuration
 
 ```bash
+# Reconfigure AI provider and model
+commit config
+```
+
+## 🤖 Supported AI Providers
+
+- **Groq** - Fast inference, free tier available (Default)
+- **Google Gemini** - Free tier available
+- **OpenAI GPT** - Paid service
+- **Anthropic Claude** - Paid service
+
+## 🔧 Environment Variables
+
+The recommended way is to set API keys in your shell profile (`.zshrc`, `.bashrc`, etc.):
+
+```bash
+# Add to your ~/.zshrc or ~/.bashrc
+export GROQ_API_KEY="your_groq_api_key_here"
+export OPENAI_API_KEY="your_openai_api_key_here"
+export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+export GOOGLE_GENERATIVE_AI_API_KEY="your_google_api_key_here"
+
+# Then reload your shell
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+Available environment variables:
+- `GROQ_API_KEY` - For Groq (Default provider)
+- `OPENAI_API_KEY` - For OpenAI
+- `ANTHROPIC_API_KEY` - For Anthropic
+- `GOOGLE_GENERATIVE_AI_API_KEY` - For Google Gemini
+
+If environment variables are set, the tool will use them automatically without needing to store API keys in the config.
+
+## 📝 How It Works
+
+1. Analyzes your git diff and repository context
+2. Sends information to your chosen AI provider
+3. Generates conventional commit messages following best practices
+4. Provides multiple options in interactive mode
+5. Commits your changes with the selected message
+
+Generated messages follow the Conventional Commits specification:
+- Format: `type(scope): subject`
+- Types: feat, fix, refactor, style, docs, test, chore, perf, ci, build
+- Scope: derived from changed files and context
+- Subject: clear, concise description in imperative mood
+
+## 🛠️ Development
+
+```bash
+# Clone the repository
+git clone https://github.com/muhammedsamal/commit.git
+cd commit
+
 # Install dependencies
 bun install
 
@@ -153,17 +136,42 @@ bun run start
 bun run build
 ```
 
-## License
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**"No API key found" error:**
+```bash
+# Set the environment variable in your shell profile
+echo 'export GROQ_API_KEY="your_api_key_here"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**"Not a git repository" error:**
+```bash
+git init
+git config user.name "Your Name"
+git config user.email "your.email@example.com"
+```
+
+**"Command not found" after global install:**
+```bash
+# Ensure Bun's global bin directory is in your PATH
+echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- [Anthropic's Claude](https://www.anthropic.com/claude) for AI capabilities
+- [AI SDK](https://sdk.vercel.ai/) for unified AI provider integration
 - [Conventional Commits](https://www.conventionalcommits.org/) for commit message specification
 - [Commander.js](https://github.com/tj/commander.js/) for CLI framework
 
-## Support
+## 🤔 Support
 
 If you encounter any issues or have questions:
 1. Check the error messages for helpful suggestions
