@@ -6,8 +6,10 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
@@ -30,66 +32,74 @@ func main() {
 		return // early exit
 	}
 
+	// Run git commands in parallel
 	start = time.Now()
-	// 1. Define command (executable name, args)
-	cmd = exec.Command("git", "status")
+	var wg sync.WaitGroup
+	var gitStatus, currentBranch, gitLog, diff string
+	var statusErr, branchErr, logErr, diffErr error
 
-	// 2. run and capture output
-	output, err := cmd.Output()
-	fmt.Println("Time taken to get git status: ", time.Since(start))
+	wg.Add(4)
 
-	if err != nil {
-		log.Fatalf("Git command failed: %v\nError output:\n%s", err, err.Error())
+	go func() {
+		defer wg.Done()
+		cmd := exec.Command("git", "status")
+		output, err := cmd.Output()
+		if err != nil {
+			statusErr = err
+			return
+		}
+		gitStatus = strings.TrimSpace(string(output))
+	}()
+
+	go func() {
+		defer wg.Done()
+		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+		output, err := cmd.Output()
+		if err != nil {
+			branchErr = err
+			return
+		}
+		currentBranch = strings.TrimSpace(string(output))
+	}()
+
+	go func() {
+		defer wg.Done()
+		cmd := exec.Command("git", "log", "-n", "10", "--oneline")
+		output, err := cmd.Output()
+		if err != nil {
+			logErr = err
+			return
+		}
+		gitLog = strings.TrimSpace(string(output))
+	}()
+
+	go func() {
+		defer wg.Done()
+		cmd := exec.Command("git", "diff", "HEAD")
+		output, err := cmd.Output()
+		if err != nil {
+			diffErr = err
+			return
+		}
+		diff = strings.TrimSpace(string(output))
+	}()
+
+	wg.Wait()
+	fmt.Println("Time taken to get all git data in parallel: ", time.Since(start))
+
+	// Check for errors
+	if statusErr != nil {
+		log.Fatalf("Git status failed: %v", statusErr)
 	}
-
-	gitStatus := strings.TrimSpace(string(output))
-
-	// fmt.Println(gitStatus)
-
-	start = time.Now()
-	// get the current branch name
-	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-
-	output, err = cmd.Output()
-	fmt.Println("Time taken to get current branch name: ", time.Since(start))
-
-	if err != nil {
-		log.Fatalf("Git command failed: %v\nError output:\n%s", err, err.Error())
+	if branchErr != nil {
+		log.Fatalf("Git branch failed: %v", branchErr)
 	}
-
-	currentBranch := strings.TrimSpace(string(output))
-
-	// fmt.Println("Current branch name is: ", currentBranch)
-
-	start = time.Now()
-	// get the git log
-	cmd = exec.Command("git", "log", "-n", "10", "--oneline")
-
-	output, err = cmd.Output()
-	fmt.Println("Time taken to get git log: ", time.Since(start))
-
-	if err != nil {
-		log.Fatalf("Git command failed: %v\nError output:\n%s", err, err.Error())
+	if logErr != nil {
+		log.Fatalf("Git log failed: %v", logErr)
 	}
-
-	gitLog := strings.TrimSpace(string(output))
-
-	// fmt.Println("Git log is: ", gitLog)
-
-	start = time.Now()
-	// get the diff
-	cmd = exec.Command("git", "diff", "HEAD")
-
-	output, err = cmd.Output()
-	fmt.Println("Time taken to get diff: ", time.Since(start))
-
-	if err != nil {
-		log.Fatalf("Git command failed: %v\nError output:\n%s", err, err.Error())
+	if diffErr != nil {
+		log.Fatalf("Git diff failed: %v", diffErr)
 	}
-
-	diff := strings.TrimSpace(string(output))
-
-	// fmt.Println("Diff is: ", diff)
 
 	start = time.Now()
 	// init genkit
@@ -114,6 +124,15 @@ func main() {
 		log.Fatalf("Genkit failed: %v\nError output:\n%s", err, err.Error())
 	}
 
-	log.Println(res.Text())
+	commitMessage := res.Text()
+	log.Println(commitMessage)
+
+	// Copy to clipboard
+	err = clipboard.WriteAll(commitMessage)
+	if err != nil {
+		log.Fatalf("Failed to copy to clipboard: %v", err)
+	}
+
+	fmt.Println("\nCommit message copied to clipboard!")
 
 }
