@@ -28,8 +28,16 @@ const (
 	StyleDetailed     Style = "detailed"     // git commit -m "title" -m "description"
 )
 
+type Action string
+
+const (
+	ActionCommit    Action = "commit"    // git add + git commit
+	ActionClipboard Action = "clipboard" // copy to clipboard only
+)
+
 type Config struct {
-	Style Style `json:"style"`
+	Style  Style  `json:"style"`
+	Action Action `json:"action"`
 }
 
 func configPath() string {
@@ -73,6 +81,41 @@ func askStyle(reader *bufio.Reader) Style {
 			fmt.Println("Invalid choice. Enter 1, 2, or 3.")
 		}
 	}
+}
+
+func askAction(reader *bufio.Reader) Action {
+	fmt.Println("\nAfter generating the commit message:")
+	fmt.Println("  1) Run commit  (git add + git commit automatically)")
+	fmt.Println("  2) Copy only   (copy to clipboard)")
+	for {
+		fmt.Print("Choose (1-2): ")
+		input, _ := reader.ReadString('\n')
+		switch strings.TrimSpace(input) {
+		case "1":
+			return ActionCommit
+		case "2":
+			return ActionClipboard
+		default:
+			fmt.Println("Invalid choice. Enter 1 or 2.")
+		}
+	}
+}
+
+func gitCommit(msg string, style Style) error {
+	var args []string
+	if style == StyleDetailed {
+		lines := strings.SplitN(msg, "\n", 2)
+		args = []string{"commit", "-m", strings.TrimSpace(lines[0])}
+		if len(lines) == 2 {
+			args = append(args, "-m", strings.TrimSpace(lines[1]))
+		}
+	} else {
+		args = []string{"commit", "-m", msg}
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func runGit(args ...string) (string, error) {
@@ -189,6 +232,7 @@ func main() {
 	staged := flag.Bool("s", false, "Use staged changes only (git diff --staged)")
 	autoAdd := flag.Bool("a", false, "Auto-stage all changes before generating")
 	setStyle := flag.Bool("style", false, "Change commit message style")
+	setAction := flag.Bool("action", false, "Change post-generate action (commit or clipboard)")
 	flag.Parse()
 
 	cfg := loadConfig()
@@ -202,12 +246,25 @@ func main() {
 		return
 	}
 
-	// First-run setup
-	if cfg.Style == "" {
-		fmt.Println("Welcome! Let's set up your commit message style.")
-		cfg.Style = askStyle(reader)
+	// --action: change action and exit
+	if *setAction {
+		cfg.Action = askAction(reader)
 		saveConfig(cfg)
-		fmt.Printf("Style saved: %s\n\n", cfg.Style)
+		fmt.Printf("Action saved: %s\n", cfg.Action)
+		return
+	}
+
+	// First-run setup
+	if cfg.Style == "" || cfg.Action == "" {
+		fmt.Println("Welcome! Let's set up your preferences.")
+		if cfg.Style == "" {
+			cfg.Style = askStyle(reader)
+		}
+		if cfg.Action == "" {
+			cfg.Action = askAction(reader)
+		}
+		saveConfig(cfg)
+		fmt.Printf("Setup complete! (style: %s, action: %s)\n\n", cfg.Style, cfg.Action)
 	}
 
 	// Auto-stage if requested
@@ -288,9 +345,18 @@ func main() {
 		fmt.Printf("\n\n%s\n", commitMessage)
 	}
 
-	clipContent := formatForClipboard(commitMessage, cfg.Style)
-	if err := clipboard.WriteAll(clipContent); err != nil {
-		log.Fatalf("Failed to copy to clipboard: %v", err)
+	if cfg.Action == ActionCommit {
+		if err := exec.Command("git", "add", ".").Run(); err != nil {
+			log.Fatalf("git add failed: %v", err)
+		}
+		if err := gitCommit(commitMessage, cfg.Style); err != nil {
+			log.Fatalf("git commit failed: %v", err)
+		}
+	} else {
+		clipContent := formatForClipboard(commitMessage, cfg.Style)
+		if err := clipboard.WriteAll(clipContent); err != nil {
+			log.Fatalf("Failed to copy to clipboard: %v", err)
+		}
+		fmt.Println("\nCommit message copied to clipboard!")
 	}
-	fmt.Println("\nCommit message copied to clipboard!")
 }
