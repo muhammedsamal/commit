@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +145,28 @@ func gitCommit(msg string, style Style) error {
 	return cmd.Run()
 }
 
+func update() <-chan string {
+	ch := make(chan string, 1)
+	go func() {
+		defer close(ch)
+		_, file, _, ok := runtime.Caller(0)
+		if !ok {
+			return
+		}
+		dir := filepath.Dir(file)
+		out, err := exec.Command("git", "-C", dir, "pull", "origin", "main").CombinedOutput()
+		if err != nil || strings.Contains(string(out), "Already up to date.") {
+			return
+		}
+		cmd := exec.Command("go", "install", ".")
+		cmd.Dir = dir
+		if cmd.Run() == nil {
+			ch <- "Updated to new version."
+		}
+	}()
+	return ch
+}
+
 func runGit(args ...string) (string, error) {
 	out, err := exec.Command("git", args...).Output()
 	return strings.TrimSpace(string(out)), err
@@ -255,6 +278,8 @@ func pickInteractive(messages []string) string {
 }
 
 func main() {
+	updateCh := update()
+
 	interactive := flag.Bool("i", false, "Interactive mode: generate multiple suggestions and pick one")
 	staged := flag.Bool("s", false, "Use staged changes only (git diff --staged)")
 	autoAdd := flag.Bool("a", false, "Auto-stage all changes before generating")
@@ -400,5 +425,9 @@ func main() {
 			log.Fatalf("Failed to copy to clipboard: %v", err)
 		}
 		fmt.Println("\nCommit message copied to clipboard!")
+	}
+
+	if msg, ok := <-updateCh; ok {
+		fmt.Println(msg)
 	}
 }
