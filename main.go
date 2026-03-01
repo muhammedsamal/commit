@@ -35,9 +35,17 @@ const (
 	ActionClipboard Action = "clipboard" // copy to clipboard only
 )
 
+type ClipFormat string
+
+const (
+	ClipFormatMessage ClipFormat = "message" // just the commit message text
+	ClipFormatCommand ClipFormat = "command" // git commit -m "..." [-m "..."]
+)
+
 type Config struct {
-	Style  Style  `json:"style"`
-	Action Action `json:"action"`
+	Style      Style      `json:"style"`
+	Action     Action     `json:"action"`
+	ClipFormat ClipFormat `json:"clip_format"`
 }
 
 func configPath() string {
@@ -95,6 +103,24 @@ func askAction(reader *bufio.Reader) Action {
 			return ActionCommit
 		case "2":
 			return ActionClipboard
+		default:
+			fmt.Println("Invalid choice. Enter 1 or 2.")
+		}
+	}
+}
+
+func askClipFormat(reader *bufio.Reader) ClipFormat {
+	fmt.Println("\nClipboard copy format:")
+	fmt.Println("  1) Message only  (fix: add validation)")
+	fmt.Println("  2) Command       (git commit -m \"fix: add validation\")")
+	for {
+		fmt.Print("Choose (1-2): ")
+		input, _ := reader.ReadString('\n')
+		switch strings.TrimSpace(input) {
+		case "1":
+			return ClipFormatMessage
+		case "2":
+			return ClipFormatCommand
 		default:
 			fmt.Println("Invalid choice. Enter 1 or 2.")
 		}
@@ -198,12 +224,13 @@ func generateMessage(ctx context.Context, g *genkit.Genkit, style Style, gitStat
 	return strings.TrimSpace(res.Text()), nil
 }
 
-func formatForClipboard(msg string, style Style) string {
-	if style == StyleDetailed {
+func formatForClipboard(msg string, format ClipFormat) string {
+	if format == ClipFormatCommand {
 		lines := strings.SplitN(msg, "\n", 2)
-		if len(lines) == 2 {
+		if len(lines) == 2 && strings.TrimSpace(lines[1]) != "" {
 			return fmt.Sprintf(`git commit -m %q -m %q`, strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]))
 		}
+		return fmt.Sprintf(`git commit -m %q`, strings.TrimSpace(lines[0]))
 	}
 	return msg
 }
@@ -233,6 +260,7 @@ func main() {
 	autoAdd := flag.Bool("a", false, "Auto-stage all changes before generating")
 	setStyle := flag.Bool("style", false, "Change commit message style")
 	setAction := flag.Bool("action", false, "Change post-generate action (commit or clipboard)")
+	setClipFormat := flag.Bool("clipformat", false, "Change clipboard copy format (message or command)")
 	flag.Parse()
 
 	cfg := loadConfig()
@@ -249,8 +277,19 @@ func main() {
 	// --action: change action and exit
 	if *setAction {
 		cfg.Action = askAction(reader)
+		if cfg.Action == ActionClipboard {
+			cfg.ClipFormat = askClipFormat(reader)
+		}
 		saveConfig(cfg)
 		fmt.Printf("Action saved: %s\n", cfg.Action)
+		return
+	}
+
+	// --clipformat: change clip format and exit
+	if *setClipFormat {
+		cfg.ClipFormat = askClipFormat(reader)
+		saveConfig(cfg)
+		fmt.Printf("Clipboard format saved: %s\n", cfg.ClipFormat)
 		return
 	}
 
@@ -262,6 +301,9 @@ func main() {
 		}
 		if cfg.Action == "" {
 			cfg.Action = askAction(reader)
+			if cfg.Action == ActionClipboard && cfg.ClipFormat == "" {
+				cfg.ClipFormat = askClipFormat(reader)
+			}
 		}
 		saveConfig(cfg)
 		fmt.Printf("Setup complete! (style: %s, action: %s)\n\n", cfg.Style, cfg.Action)
@@ -353,7 +395,7 @@ func main() {
 			log.Fatalf("git commit failed: %v", err)
 		}
 	} else {
-		clipContent := formatForClipboard(commitMessage, cfg.Style)
+		clipContent := formatForClipboard(commitMessage, cfg.ClipFormat)
 		if err := clipboard.WriteAll(clipContent); err != nil {
 			log.Fatalf("Failed to copy to clipboard: %v", err)
 		}
