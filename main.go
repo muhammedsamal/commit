@@ -49,6 +49,10 @@ type Config struct {
 	ClipFormat ClipFormat `json:"clip_format"`
 }
 
+// const MODEL = "googleai/gemini-3-flash-preview"
+// const MODEL = "googleai/gemini-3.1-pro-preview"
+const MODEL = "googleai/gemini-3.1-flash-lite-preview"
+
 func configPath() string {
 	dir, _ := os.UserCacheDir()
 	return filepath.Join(dir, "commit", "config.json")
@@ -369,7 +373,7 @@ func main() {
 	ctx := context.Background()
 	g := genkit.Init(ctx,
 		genkit.WithPlugins(&googlegenai.GoogleAI{}),
-		genkit.WithDefaultModel("googleai/gemini-3-flash-preview"),
+		genkit.WithDefaultModel(MODEL),
 	)
 
 	var commitMessage string
